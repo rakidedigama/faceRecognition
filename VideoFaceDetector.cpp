@@ -34,7 +34,7 @@ void VideoFaceDetector::saveFace(QString imageName)
         cv::Mat faceImageGrayResized;
         cv::cvtColor(faceImage,faceImageGray,CV_RGB2GRAY);
         cv::Size pgmSize(92,112);
-        resize(faceImageGray,faceImageGrayResized,pgmSize);
+        cv::resize(faceImageGray,faceImageGrayResized,pgmSize);
         //QString imageName = QDateTime::currentDateTime().toString();
         cv::imwrite(imageName.toStdString(),faceImageGrayResized);
 
@@ -51,7 +51,7 @@ cv::Mat VideoFaceDetector::getFaceImage(){
         cv::Mat faceImageGrayResized;
         cv::cvtColor(faceImage,faceImageGray,CV_RGB2GRAY);
         cv::Size pgmSize(92,112);
-        resize(faceImageGray,faceImageGrayResized,pgmSize);
+        cv::resize(faceImageGray,faceImageGrayResized,pgmSize);
         return faceImageGrayResized;
     }
 }

@@ -14,18 +14,29 @@ class FaceClassifier
 
 public:
 
-    FaceClassifier::FaceClassifier(Ptr<FaceRecognizer> model);
-    void FaceClassifier::setClassifier(Ptr<FaceRecognizer> model);
+    FaceClassifier::FaceClassifier(Ptr<BasicFaceRecognizer> model);
+    void FaceClassifier::setClassifier(Ptr<BasicFaceRecognizer> model);
+    void FaceClassifier::updateThreshold(double newThreshold);
     void FaceClassifier::trainClassifier();
     void FaceClassifier::trainClassifier(vector<Mat> images,vector<int> labels);
+    void FaceClassifier::saveModel();
+    void FaceClassifier::loadModel();
     int FaceClassifier::predictLabel(Mat predImg);
+    Mat FaceClassifier::getMeanFace();
+    Mat FaceClassifier::getEigenVectors();
+    Mat FaceClassifier::getEigenValues();
+    double FaceClassifier::getProjectedDifference(Mat unknownFace);
     double FaceClassifier::getConfidence(Mat predImg,int pLabel);
    vector<int> FaceClassifier::getTrainingLabels();
     vector<Mat> FaceClassifier::getTrainingImages();
+
+    static Mat norm_0_255(InputArray _src);
 private:
+
+
     vector<Mat> m_images;
     vector<int> m_labels;
-    Ptr<FaceRecognizer> m_model ;
+    Ptr<BasicFaceRecognizer> m_model ;
 
 
 
