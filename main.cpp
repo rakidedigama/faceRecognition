@@ -35,67 +35,18 @@ using namespace std;
 bool fullProgram =true ;
 
 
-// Stages in fullProgram - save or load training images from XML/train/predict
-bool trainImages = false;
-bool loadModel = false;             //load trained model
-bool saveImages = false;
-bool loadFromXml = false;           //load images & labels
-bool predict = false;
 
-QTime myTimer;
 
-Mat faceImageGray;
-Mat faceImageGrayResized;
-Mat testSample;
-int testLabel ;
-int numberOfPersons = 0;
-int numberOfFolders = 0;
-int maxImages = 100;
-int eigenFaces = 50;
 string name;
 QStringList names;
 QString workFolder = "C:/BUILDS/FaceDetectionProject/Work/";
 string savedModelFile = "eigenFaces_t.yml";
 
-QFile fIn("C:/BUILDS/FaceDetectionProject/Work/names.txt");  // Names of faces
-QFile outFile("C:/BUILDS/FaceDetectionProject/Work/projectedDifferences.txt");
 
 const cv::String    WINDOW_NAME("Camera video");
 const cv::String    CASCADE_FILE = "C:/BUILDS/openCV/install/etc/haarcascades/haarcascade_frontalface_alt.xml";
 
-static void writeNameToFile(QString name){
 
-    // write data
-    QFile fOut("C:/BUILDS/FaceDetectionProject/Work/names.txt");
-     //QIODevice fOut("names.txt");
-     //f.open(QIODevice::WriteOnly | QIODevice::Append))
-     if (fOut.open(QIODevice::WriteOnly | QIODevice::Append)) {
-       QTextStream s(&fOut);
-       //for (int i = 0; i < namesList.size(); ++i)
-         s << name << '\n';
-     //
-     } else {
-       std::cerr << "error opening output file\n";
-       //return EXIT_FAILURE;
-     }
-     fOut.close();
-
-}
-
-static void readNames(){   // read data
-
-    if (fIn.open(QFile::ReadOnly | QFile::Text)) {
-      QTextStream sIn(&fIn);
-
-      while (!sIn.atEnd())
-        //names += sIn.readLine();
-        //cout << sIn.readLine().toStdString()<<endl;
-       names.append(sIn.readLine());
-    } else {
-      std::cerr << "No registered names"<<endl;
-      //return EXIT_FAILURE;
-    }
-}
 
 static void readTrainingData_csv(const string& filename, vector<Mat>& images, vector<int>& labels, char separator = ';') {
     std::ifstream file(filename.c_str(), ifstream::in);
@@ -116,62 +67,126 @@ static void readTrainingData_csv(const string& filename, vector<Mat>& images, ve
     }
 }
 
-static vector<Mat> loadImagesFromFolder(vector<Mat> images){
-
-    //Mat vecOfLabels(1,numberOfPersons,CV_32SC1);
-    string folderPath = "C:/BUILDS/FaceDetectionProject/Work/commonArea/";
-    QDir dir(QString::fromStdString(folderPath));
-
-    numberOfFolders = dir.count()-2;
-    cout <<"Number of folders: " << numberOfFolders;
-
-    for (int person = 1; person<=numberOfFolders; person++){ // For each folder
-        string path = format("C:\\BUILDS\\FaceDetectionProject\\Work\\commonArea\\s%d",person);
-        QDir dir(QString::fromStdString(path));
-        int numberOfImages = dir.count()-2;
-
-        for (int a=1; a<=numberOfImages;a++) { // load Images in Folder
-            string name = format("C:\\BUILDS\\FaceDetectionProject\\Work\\commonArea\\s%d\\%d.pgm",person,a);
-            Mat img = imread(name,CV_LOAD_IMAGE_GRAYSCALE); // pgm implies grayscale, maybe even: imread(name,0); to return CV_8U
-            if ( img.empty() )
-            {
-                cerr << "whaa " << name << " can't be loaded!" << endl;
-                continue;
-            }
-            else{
-                cout<<"loading :"<< name <<endl;
-            }
-            images.push_back(img);
-        }
-    }
-    return images;
-}
-
-static vector<int> loadLabels(vector<int> labels){
-
-    for (int person = 1; person<=numberOfFolders; person++){
-        string path = format("C:\\BUILDS\\FaceDetectionProject\\Work\\commonArea\\s%d",person);
-        QDir dir(QString::fromStdString(path));
-        int numberOfImages = dir.count()-2;
-        for (int a=1; a<=numberOfImages;a++)  // a <=Count would do one too many...
-        {
-            labels.push_back(person);
-        }
-    }    
-    return labels;
-}
 
 
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
     //Q_ConsoleDebugStream stream(std::cout, "log_DalsaImageAnalyzer");
+    CameraViewer c;  // grab frames and send to faceDetector
+    VideoFaceDetector d(CASCADE_FILE); // detect faces and send to User
+
+    UserInput u; // user program
+
+    qRegisterMetaType< cv::Mat >("cv::Mat");
+    qRegisterMetaType< cv::Rect >("cv::Rect");
+    QObject::connect(&c,SIGNAL(sendFrame(cv::Mat)),&d,SLOT(catchFrame(cv::Mat)));
+    QObject::connect(&d,SIGNAL(sendRectangle(cv::Rect)),&c,SLOT(catchFaceRectangle(cv::Rect)));
+
+    QObject::connect(&d,SIGNAL(sendFace(cv::Mat)),&u,SLOT(catchFace(cv::Mat)));
+   // QObject::connect(&c,SIGNAL(sendDetectedFace(cv::Mat)),&u,SLOT(catchFace(cv::Mat)));
+    QObject::connect(&u,SIGNAL(savingFacesMode(bool)),&c,SLOT(saveVideos(bool)));
+
+    cout<<"Starting camera"<<endl;
+    c.start();
+    cout<<"Starting detector" <<endl;
+    d.start();
+    cout<<"starting user"<<endl;
+    u.start();
+
+
+
+
+
+/*
+    while (true)
+    {
+
+        int presentTime = myTimer.elapsed();
+        int timeDelay = presentTime - previousTime;
+        if(userInput== ""){
+            cout << "Enter input: s-save images, t-train, p-predict : ";
+            cin >> userInput;
+            if(userInput=="s"){
+                saveImages = true;
+                string folderPath = "C:/BUILDS/FaceDetectionProject/Work/commonArea/";
+                QDir dir(QString::fromStdString(folderPath));
+                cout<<"Number of people: " << dir.count()-2;
+                cout<<"Enter name of person: ";
+                string name;
+                cin >> name;
+                person = dir.count()-2 +1; // dir.Count() returns number of files + 2. Subtract names.txt file
+                cout<<"Number of people updated : "<< person<<" set SaveImges : True; "<<" Writing name to File and adding to list: " << name;
+                writeNameToFile(QString::fromStdString(name));  // write name to local text file
+                names.append(QString::fromStdString(name));
+
+                u.saveImages();
+
+            }
+            if(userInput=="x"){
+                saveImages = false;
+                loadFromXml = true;
+                cout<<"Loading Training data from XML"; }
+            if(userInput=="t"){
+                trainImages = true;
+                cout<<"Start Training Images" <<endl; }
+            if(userInput=="l"){
+                loadModel = true;
+                cout<<"Loading Model" << endl; }
+            if(userInput=="p"){
+                predict = true;
+                cout<<"Start Recognition" <<endl; }
+        }
+
+
+
+    if(saveImages){
+        if (faceCount<=maxImages && timeDelay>200) {
+            string subFolderPath = format("C:/BUILDS/FaceDetectionProject/Work/commonArea/s%d",person);///%d.pgm,faceCount
+            QDir dirSub(QString::fromStdString(subFolderPath));
+            if (!dirSub.exists()) {  // Create Subfolder
+                dirSub.mkpath(QString::fromStdString(subFolderPath));      }
+            string fileName = format("%d.pgm",faceCount);
+            QString imageName =  QString::fromStdString(subFolderPath) + "/" +  QString::fromStdString(fileName) ;
+
+
+             cv::Mat faceImageGrayResized = u.getCurrentFace();
+            cv::imwrite(imageName.toStdString(),faceImageGrayResized);
+            cout<<"saving Face Image"<< imageName.toStdString()<<endl;
+            //printf("Saving Face Image\n");
+
+            //detector.saveFace(imageName);
+            previousTime = myTimer.elapsed();
+            faceCount++;       }
+        if(faceCount>maxImages)
+        {
+            cout<< maxImages << " Images already saved" <<endl;
+            numberOfPersons++;
+            saveImages = false;
+            faceCount = 1;              // resest faceCount to 0 for new person
+            userInput = "";
+        }
+    }
+    }*/
+
+
+    return a.exec();
+}
+
+
+
+   // u.viewFrames();
+
+
+
+
+
+    /*
+    //Q_ConsoleDebugStream stream(std::cout, "log_DalsaImageAnalyzer");
     VideoCapture camera;
     cout<<"openign camera";
-    std::string videoStreamAddress = "rtsp://192.168.1.7/profile2/media.smp";
 
-
-
+//    std::string videoStreamAddress = "rtsp://192.168.1.7/profile2/media.smp";
 //    if (!camera.open(videoStreamAddress)) {
 //        //fprintf(stderr, "Error getting camera...\n");
 //        cout<<"Error getting camera..\n";
@@ -179,12 +194,17 @@ int main(int argc, char *argv[])
 //    }
 
     // Web Camera
-
     if (!camera.open(0)) {
         fprintf(stderr, "Error getting camera...\n"); exit(1);
     }
+
+    cv::namedWindow(WINDOW_NAME, cv::WINDOW_KEEPRATIO | cv::WINDOW_AUTOSIZE);
+    VideoFaceDetector detector(CASCADE_FILE, camera);
+    cv::Mat frame;
+
     Ptr<BasicFaceRecognizer> model1 = EigenFaceRecognizer::create(eigenFaces);
     FaceClassifier classifier(model1);
+
     vector<Mat> images;             // Empty vector
     vector<qint32> labels;
     readNames();
@@ -195,12 +215,6 @@ int main(int argc, char *argv[])
 
     myTimer.start();
     int previousTime = 0;
-    // Try opening camera
-
-    cv::namedWindow(WINDOW_NAME, cv::WINDOW_KEEPRATIO | cv::WINDOW_AUTOSIZE);
-
-    VideoFaceDetector detector(CASCADE_FILE, camera);
-    cv::Mat frame;
     int person = 0;
     int faceCount = 1;
     string userInput = "";
@@ -209,9 +223,15 @@ int main(int argc, char *argv[])
 
     while (true)
     {
+        auto start = cv::getCPUTickCount();
+        detector >> frame;
+        auto end = cv::getCPUTickCount();
+        time_per_frame = (end - start) / cv::getTickFrequency();
+        fps = (15 * fps + (1 / time_per_frame)) / 16;
+
         if(userInput== ""){
             cout << "Enter input: s-save images, t-train, p-predict : ";
-            cin >> userInput;           
+            cin >> userInput;
             if(userInput=="s"){
                 saveImages = true;
                 string folderPath = "C:/BUILDS/FaceDetectionProject/Work/commonArea/";
@@ -238,11 +258,6 @@ int main(int argc, char *argv[])
                 predict = true;
                 cout<<"Start Recognition" <<endl; }
         }
-        auto start = cv::getCPUTickCount();
-        detector >> frame;
-        auto end = cv::getCPUTickCount();
-        time_per_frame = (end - start) / cv::getTickFrequency();
-        fps = (15 * fps + (1 / time_per_frame)) / 16;
 
         if (detector.isFaceFound())
         {
@@ -269,7 +284,8 @@ int main(int argc, char *argv[])
                     numberOfPersons++;
                     saveImages = false;
                     faceCount = 1;              // resest faceCount to 0 for new person
-                    userInput = "";   }
+                    userInput = "";
+                }
             }
             if(loadFromXml){
                 QString fn_csv = "C:\\BUILDS\\FaceDetectionProject\\faceImagesCSV.csv";
@@ -365,6 +381,8 @@ int main(int argc, char *argv[])
         if (cv::waitKey(25) == 27) break;
 
     }   //end detection
-    return a.exec();
 
-}
+
+
+
+}*/

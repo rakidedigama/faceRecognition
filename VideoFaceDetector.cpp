@@ -10,9 +10,11 @@
 #include <opencv2\imgproc.hpp>
 #include "QString"
 #include "QDateTime"
+
+using namespace std;
 const double VideoFaceDetector::TICK_FREQUENCY = cv::getTickFrequency();
 
-VideoFaceDetector::VideoFaceDetector(const std::string cascadeFilePath, cv::VideoCapture &videoCapture)
+VideoFaceDetector::VideoFaceDetector(const std::string cascadeFilePath)
 {
     m_videoCapture = NULL;
      m_faceCascade = NULL;
@@ -23,9 +25,59 @@ VideoFaceDetector::VideoFaceDetector(const std::string cascadeFilePath, cv::Vide
      m_resizedWidth = 320;
      m_templateMatchingMaxDuration = 3;
     setFaceCascade(cascadeFilePath);
-    setVideoCapture(videoCapture);
+    //setVideoCapture(videoCapture);
 
 }
+
+/*
+grab frame from camera viewer; run detector for face;
+if found emit face to user; else return empty mat*/
+void VideoFaceDetector::run(){
+    while(true){
+        //catchFrame(fromCameraViewer);
+        if(frame.empty()){
+            //cout<<"Waiting for Frame from Camera"<<endl;
+        }
+        else{
+            //cv::resize(frame,frame,cv::Size(640,360));
+            //cout<<"Getting frame and detecting"<<endl;
+            getFrameAndDetect();
+            if(m_foundFace){
+               // std::cout<<"Face detected"<<std::endl;
+
+                //cv::rectangle(frame, m_detector.face(frame), cv::Scalar(255, 0, 0));
+                // send rectangle back to camera viewer
+                //emit sendRectangle(face(frame));
+
+                if(! m_templateMatchingRunning){
+                    emit sendFace(getFaceImage());
+
+                }
+                else{ // if Haar face not found, send empty matrix
+
+                    cv::Mat MT;
+                    emit sendFace(MT);
+                }
+
+            }
+             else{ // if face not found altogether, send empty matrix
+                cv::Mat MT;
+               // std::cout<<"Face not detected"<<std::endl;
+                emit sendFace(MT);
+
+            }
+        }
+    }
+}
+
+void VideoFaceDetector::catchFrame(cv::Mat pFrame)
+{
+    //cout<<"Got frame in detector"<<endl;
+    frame = pFrame;
+}
+
+/*
+
 void VideoFaceDetector::saveFace(QString imageName)
 {
     if(isFaceFound()){
@@ -44,16 +96,31 @@ void VideoFaceDetector::saveFace(QString imageName)
 
 }
 
+*/
+
 cv::Mat VideoFaceDetector::getFaceImage(){
-    if(isFaceFound()){
-        cv::Mat faceImage = getROIImage();
+    //if(isFaceFound()){
+        face(frame);  // assigns face rect to m_face mat
+        cv::Mat faceImage = m_face;
+        m_face.release();
+        frame.release();
+        if(faceImage.empty()){
+            //std::cout<<"Empty";
+            cv::Mat em;
+            return em;
+        }
+
+        else{
         cv::Mat faceImageGray;
         cv::Mat faceImageGrayResized;
+
         cv::cvtColor(faceImage,faceImageGray,CV_RGB2GRAY);
+
         cv::Size pgmSize(92,112);
         cv::resize(faceImageGray,faceImageGrayResized,pgmSize);
         return faceImageGrayResized;
-    }
+        }
+    //}
 }
 
 void VideoFaceDetector::setVideoCapture(cv::VideoCapture &videoCapture)
@@ -101,14 +168,19 @@ bool VideoFaceDetector::isFaceFound() const
 	return m_foundFace;
 }
 
-cv::Rect VideoFaceDetector::face(const cv::Mat &frame)
+cv::Mat VideoFaceDetector::getTrackedFace(){
+    cv::Mat trackedFace = frame(m_trackedFace);
+    return trackedFace;
+}
+
+cv::Rect VideoFaceDetector::face(const cv::Mat &frame) // trackedface is scaled, and returned as scaled face roiImage
 {
     cv::Rect faceRect = m_trackedFace;
     faceRect.x = (int)(faceRect.x / m_scale);
     faceRect.y = (int)(faceRect.y / m_scale);
     faceRect.width = (int)(faceRect.width / m_scale);
     faceRect.height = (int)(faceRect.height / m_scale);
-    m_roiImage = frame(faceRect).clone();  // copy to mat
+    m_face = frame(faceRect).clone();  // copy to mat
     return faceRect;
 }
 
@@ -192,6 +264,7 @@ cv::Mat VideoFaceDetector::getFaceTemplate(const cv::Mat &frame, cv::Rect face)
 {
     face.x += face.width / 4;
     face.y += face.height / 4;
+
     face.width /= 2;
     face.height /= 2;
 
@@ -199,21 +272,22 @@ cv::Mat VideoFaceDetector::getFaceTemplate(const cv::Mat &frame, cv::Rect face)
     return faceTemplate;
 }
 
-//returned by doublerectsize. Twice the size of face
-cv::Mat VideoFaceDetector::getROIImage(){
 
-        return m_roiImage;
+cv::Mat VideoFaceDetector::getROIImage(){
+        return m_face;
 
 }
 
 //Main function. Scan full image when face not found
 void VideoFaceDetector::detectFaceFullImage(const cv::Mat &frame)
 {
-    // Minimum face size is 1/5th of screen height
+    //scale factor = 1.1
+    // min neighbors = 4-6 for good faces
+    // Minimum face size  of screen height
     // Maximum face size is 2/3rds of screen height
-    m_faceCascade->detectMultiScale(frame, m_allFaces, 1.1, 1, 0,
-        cv::Size(frame.rows /6, frame.rows / 6),
-        cv::Size(frame.rows * 4 / 5, frame.rows * 4 / 5));
+    m_faceCascade->detectMultiScale(frame, m_allFaces, 1.1, 5, 0,
+        cv::Size(frame.rows /10, frame.rows / 10),
+        cv::Size(frame.rows * 1 /2, frame.rows * 1/ 2));
 
     if (m_allFaces.empty()) return;              // no face objects found
 
@@ -249,7 +323,7 @@ void VideoFaceDetector::detectFaceAroundRoi(const cv::Mat &frame)
     // Get detected face
     m_trackedFace = biggestFace(m_allFaces);
 
-    // Add roi offset to face
+    // Add roi offset to face to get original coordinates of frame
     m_trackedFace.x += m_faceRoi.x;
     m_trackedFace.y += m_faceRoi.y;
 
@@ -317,9 +391,10 @@ void VideoFaceDetector::detectFacesTemplateMatching(const cv::Mat &frame)
     m_facePosition = centerOfRect(m_trackedFace);
 }
 
-cv::Point VideoFaceDetector::getFrameAndDetect(cv::Mat &frame)
+cv::Point VideoFaceDetector::getFrameAndDetect()
 {
-    *m_videoCapture >> frame;
+
+   // *m_videoCapture >> frame;
 
     // Downscale frame to m_resizedWidth width - keep aspect ratio
     m_scale = (double) std::min(m_resizedWidth, frame.cols) / frame.cols;
@@ -342,5 +417,5 @@ cv::Point VideoFaceDetector::getFrameAndDetect(cv::Mat &frame)
 
 cv::Point VideoFaceDetector::operator>>(cv::Mat &frame)
 {
-    return this->getFrameAndDetect(frame);
+    return this->getFrameAndDetect();
 }

@@ -4,14 +4,16 @@
 #include <opencv2\highgui.hpp>
 #include <opencv2\objdetect.hpp>
 #include "qstring.h"
+#include <QThread>
 
-class VideoFaceDetector
+class VideoFaceDetector :  public QThread
 {
+    Q_OBJECT
 public:
-    VideoFaceDetector(const std::string cascadeFilePath, cv::VideoCapture &videoCapture);
+    VideoFaceDetector(const std::string cascadeFilePath);
     ~VideoFaceDetector();
 
-    cv::Point               getFrameAndDetect(cv::Mat &frame);
+    cv::Point               getFrameAndDetect();
     cv::Point               operator>>(cv::Mat &frame);
     void                    setVideoCapture(cv::VideoCapture &videoCapture);
     cv::VideoCapture*       videoCapture() const;
@@ -24,10 +26,19 @@ public:
     cv::Point               facePosition() const;
     void                    setTemplateMatchingMaxDuration(const double s);
     double                  templateMatchingMaxDuration() const;
-    void                    saveFace(QString imageName);
+    //void                    saveFace(QString imageName);
     cv::Mat                 getFaceTemplate(const cv::Mat &frame, cv::Rect face);
     cv::Mat                 getROIImage();      // facesize color image
     cv::Mat                 getFaceImage(); // grey level pgm of roi image
+    cv::Mat                 getTrackedFace(); // trackedface ->biggestface
+protected:
+    virtual void run();
+signals:
+    void sendFace(cv::Mat);
+    void sendRectangle(cv::Rect);
+
+  public slots:
+    void catchFrame(cv::Mat);
 private:
     static const double     TICK_FREQUENCY;
 
@@ -46,7 +57,9 @@ private:
     int                     m_resizedWidth;
     cv::Point               m_facePosition;
     double                  m_templateMatchingMaxDuration;
-    cv::Mat                 m_roiImage;
+    cv::Mat                 m_face;
+
+    cv::Mat                 frame;
 
     cv::Rect    doubleRectSize(const cv::Rect &inputRect, const cv::Rect &frameSize) const;
     cv::Rect    biggestFace(std::vector<cv::Rect> &faces) const;
