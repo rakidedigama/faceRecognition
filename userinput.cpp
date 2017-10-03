@@ -26,6 +26,8 @@ const cv::String    CASCADE_FILE = "C:/BUILDS/openCV/install/etc/haarcascades/ha
 
 
 UserInput::UserInput(QObject *parent): QThread(parent),m_classifier( EigenFaceRecognizer::create(eigenFaces))
+//UserInput::UserInput(QObject *parent): QThread(parent),m_classifier( FisherFaceRecognizer::create(0,DBL_MAX))
+
 {
    m_face = NULL;
    m_gotFrame = false;
@@ -47,12 +49,16 @@ UserInput::UserInput(QObject *parent): QThread(parent),m_classifier( EigenFaceRe
    faceCount = 1;
    numberOfFolders = 0;     // updated when loading training images from folders. ie: one folder for each person/face.
 
-   folderPath = "C:/BUILDS/FaceDetectionProject/Work2/" + string(m_location) + "/";
+   folderPath = "C:/BUILDS/FaceDetectionProject/WorkCongealed/" + string(m_location) + "/";
 
-   nameList = "C:/BUILDS/FaceDetectionProject/Work2/names.txt";
+   nameList = "C:/BUILDS/FaceDetectionProject/WorkCongealed/names.txt";
    personHitVector = QVector<int>(1);
    ctpArray = QVector<int>(1);
 
+  eyeCascadePath = "C:/BUILDS/openCV/install/etc/haarcascades/haarcascade_eye_tree_eyeglasses.xml";
+   //eyeCascadePath = "C:/BUILDS/openCV/install/etc/haarcascades/parojos.xml";
+
+   //setEyeCascade(eyeCascadePath);
 
 //   Ptr<BasicFaceRecognizer> model1 = EigenFaceRecognizer::create(eigenFaces);
 //   FaceClassifier m_classifier(model1);
@@ -60,6 +66,22 @@ UserInput::UserInput(QObject *parent): QThread(parent),m_classifier( EigenFaceRe
 
 
 }
+
+//void UserInput::setEyeCascade(const std::string eyeCascadeFilePath)
+//{
+//    if (eyeCascade == NULL) {
+//        eyeCascade = new cv::CascadeClassifier(eyeCascadeFilePath);
+//        cout<<"Eye cascade loaded"<< endl;
+//    }
+//    else {
+//         eyeCascade->load(eyeCascadeFilePath);
+//    }
+
+//    if ( eyeCascade->empty()) {
+//        cout << "Error creating cascade classifier. Make sure the file" << std::endl
+//            << eyeCascadeFilePath << " exists." << std::endl;
+//    }
+//}
 
 void UserInput::writeNameToFile(QString name){
      QFile fNames(nameList);
@@ -95,6 +117,128 @@ void UserInput::printNames(){
           cout<<m_names[i].toStdString()<<endl;
 
      }
+}
+
+
+//bool UserInput::eyesFound(Mat faceImage){
+//    std::vector<cv::Rect> m_allEyes;
+//    bool eyes = false;
+//   eyeCascade->detectMultiScale(faceImage, m_allEyes, 1.1, 0, 0,
+//        cv::Size(faceImage.rows /20, faceImage.cols/ 20),
+//        cv::Size(faceImage.rows * 1 /2, faceImage.cols * 1/2));
+//   int length = static_cast<int>(m_allEyes.size());
+//   int centerx = ceil(faceImage.cols/2);
+//   if(length>=2){
+//       int sumx = 0;
+//       for(int i=0;i>length;i++){
+//           if(m_allEyes.at(i).x>centerx)
+//            sumx = sumx +1;
+//           else
+//               sumx = sumx-1;
+//       }
+//       if(sumx<length){// both eyes found
+//            eyes = true;
+//       }
+//       cout<<length<<"Eyes found"<<endl;
+//   }
+//   return eyes;
+
+//}
+
+void UserInput::alignFace(Mat faceImage,int s){
+    bool eyes = false;
+    std::vector<cv::Rect> m_allEyes;
+    QString imageName = "C:/BUILDS/FaceDetectionProject/Work/Alignment/eyes" + QString::fromStdString(to_string(s)) + ".png";
+    QString alignedImage = "C:/BUILDS/FaceDetectionProject/Work/Alignment/alignedFace"  + QString::fromStdString(to_string(s)) + ".png";
+//   eyeCascade->detectMultiScale(faceImage, m_allEyes, 1.1, 0, 0,
+//        cv::Size(faceImage.rows /20, faceImage.cols/ 20),
+//        cv::Size(faceImage.rows * 1 /4, faceImage.cols * 1/4));
+
+   int length = static_cast<int>(m_allEyes.size());
+   int centerFace = ceil(faceImage.cols/2);
+   std::vector<cv::Point> rectPoints;
+   //std::vector<cv::Rect> bestRects;
+   Point P1,P2;
+   Rect rectL, rectR;
+   if(length>=2){
+       int sumx = 0;
+       int xmin = faceImage.cols;
+       int xmax = 0;
+       int l = 0;
+       int r = 0;
+       for(int i=0;i<length;i++){
+           Rect eyeRect = m_allEyes.at(i);
+           Point center;
+
+           center.x = ceil(eyeRect.x + eyeRect.width/2);
+           center.y = ceil(eyeRect.y + eyeRect.height/2);
+           //cout<<"Rect " << i << ":" << eyeRect.x + eyeRect.width/2 << "; " <<eyeRect.y  + eyeRect.height/2<< ";" << eyeRect.width << ";" << eyeRect.height <<endl;
+           cout<<center.x <<center.y<<endl;
+           rectPoints.push_back(center);
+
+           if(center.x>centerFace){
+            sumx = sumx +1;
+           }
+           else{
+               sumx = sumx-1;
+           }
+           if(center.x<xmin){
+               xmin = center.x;
+               P1 = rectPoints.at(i);
+               l = i;
+           }
+           if(center.x>xmax){
+               xmax = center.x;
+               P2 = rectPoints.at(i);
+               r = i;
+           }
+
+       }
+
+       rectL = m_allEyes.at(l);  // left eye
+       rectR = m_allEyes.at(r);  // right eye
+       if(abs(sumx)!=length){   // both eyes found
+            eyes = true;
+       }
+      // cout<<length<<"Eyes found "<< "Geo Sum:" << sumx << endl;
+   }
+   if(eyes){ // save image with detected eyes
+
+       cv::rectangle(faceImage,rectL,cv::Scalar(255,0,0));
+       cv::rectangle(faceImage,rectR,cv::Scalar(255,0,0));
+      // cout<<length<<"Eyes found "<< "Points: P1[" << P1.x << ","<< P1.y << "] P2: [" <<P2.x << "," << P2.y<<"]"<<endl;
+       //cv::imwrite(imageName.toStdString(),faceImage);
+
+       // rotate image
+       double teta = atan2(double(P2.y-P1.y),double(P2.x-P1.x)) ;
+       teta = teta*180/3.142;
+       cv::Point2f pc(faceImage.cols/2.,faceImage.rows/2.);
+       cv::Mat r = cv::getRotationMatrix2D(pc, teta, 1.0);
+
+       cv::warpAffine(faceImage,faceImage, r, faceImage.size()); // what size I should use?
+
+       cv::imwrite(alignedImage.toStdString(), faceImage);
+
+       cout<<"Angle is : " << teta <<endl;
+   }
+
+
+//   if(!m_allEyes.empty()){
+//    cout<<length<<"found" <<endl;
+//    cout<< m_allEyes.at(0).x << m_allEyes.at(0).y<<endl;
+//    if(length>=2){
+//        cv::imwrite(imageName.toStdString(),faceImage);
+//    }
+
+//   }
+//   else
+//       cout<<"Eyes not found" <<endl;
+
+    // Locate eye coordinates
+    //Find angle. Rotate image
+    //Find distance scale image
+    //Find offset, translate image
+
 }
 
 /*Load Images from folder with given fpath*/
@@ -269,7 +413,7 @@ cv::Mat UserInput::getCurrentFace(){
 }
 
 void UserInput::getUserInput(){
-    cout << "Enter input: s-save images, t-train, p-predict : ";
+    cout << "Enter input: s-save images,a-align saved images, t-train, p-predict, c-crosstest : ";
     string action;
     cin >> action;
     m_action = QString::fromStdString(action);
@@ -294,6 +438,15 @@ void UserInput::getUserInput(){
 
         save = true;
     }
+    if(m_action=="a"){
+        //congealImages();
+        QString imageListFile = "pFacesIn.txt";
+        QString gDirectory = "C:/BUILDS/FaceDetectionProject/WorkCongealed/Temp";
+        bool con = true;
+        emit congealImages(imageListFile,gDirectory,con);
+
+
+    }
     if(m_action=="t"){
         cout<<"Start Training Images from" <<m_location<<endl;
         train = true;
@@ -315,7 +468,7 @@ void UserInput::getUserInput(){
         cout<<"Trained location is " << m_location << ". Enter test location:" ;
         cin >> testLocation;
         cout << "" <<endl;
-        crossTestFolder = "C:/BUILDS/FaceDetectionProject/Work2/" + string(testLocation) + "/";
+        crossTestFolder = "C:/BUILDS/FaceDetectionProject/WorkCongealed/" + string(testLocation) + "/";
         crossTest = true;
        // cout<<"Cross Test with "<< crossTestFolder <<endl;
     }
@@ -324,7 +477,6 @@ void UserInput::getUserInput(){
 void UserInput::saveImages(){
 
     if (faceCount<=maxImages) {
-        // string folderPath = "C:/BUILDS/FaceDetectionProject/Work/" + string(m_location) + "/";
 
          string subFolderPath = folderPath +"s" + std::to_string(person);
         QDir dirSub(QString::fromStdString(subFolderPath));
@@ -334,12 +486,17 @@ void UserInput::saveImages(){
         QString imageName =  QString::fromStdString(subFolderPath) + "/" +  QString::fromStdString(fileName) ;
 
          cv::Mat faceImageGrayResized = getCurrentFace();
-
-        cv::imwrite(imageName.toStdString(),faceImageGrayResized);
-        cout<<"saving Face Image"<< imageName.toStdString()<<endl;
-
+       // bool eyes = eyesFound(faceImageGrayResized);
+         bool eyes = true;
+        if(eyes){ // eyes found
+            cv::imwrite(imageName.toStdString(),faceImageGrayResized);
+            cout<<"saving Face Image"<< imageName.toStdString()<<endl;
+            faceCount++;
+        }
+        else
+            cout<<"Eyes not found. Not saving Image"<<endl;
        // previousTime = myTimer.elapsed();
-        faceCount++;
+
     }
     if(faceCount>maxImages)
     {
@@ -354,6 +511,15 @@ void UserInput::saveImages(){
 
 }
 
+//void UserInput::congealImages(string inputFile,string path,bool congSignal)
+//{
+////    cout<<"Start Congealing" <<endl;
+////    m_congealer.congeal();
+////    cout<<"Congealing finished"<<endl;
+////    m_action="";
+
+//}
+
 void UserInput::createClassifier(){
 //    Ptr<BasicFaceRecognizer> model1 = EigenFaceRecognizer::create(eigenFaces);
 //    FaceClassifier classifier(model1);
@@ -366,6 +532,14 @@ void UserInput::trainImages(int num){
     UserInput::loadImagesFromFolder(folderPath,num);
     UserInput::readLabels(folderPath,num);
     //UserInput::assignLabels(folderPath);
+    cout<<"Total images: " <<m_images.size()<<endl;
+
+//    for (int i=0;i<m_images.size();i++){
+//        Mat image1 = m_images.at(i);
+//        alignFace(image1,i);
+//    }
+
+
     m_classifier.trainClassifier(m_images,m_labels);
 
     int trainingTime = myTimer.elapsed();
@@ -380,6 +554,8 @@ void UserInput::trainImages(int num){
     cv::Mat values = m_classifier.getEigenValues();
     cout<<"Size of EigenVectors " << vectors.size;
     cout<<"Size of EigenValues " << values.size;
+
+
 
     m_images.clear();   // clear vectors
     m_labels.clear();
@@ -461,7 +637,7 @@ void UserInput::outConfidence(double err,int o_label, int p_label){
 
 void UserInput::output(){
 
-    QFile outputFile("C:/BUILDS/FaceDetectionProject/Work2/output.txt");
+    QFile outputFile("C:/BUILDS/FaceDetectionProject/WorkCongealed/output.txt");
     QString out = "";
     for(int i=0;i<ctpArray.length();i++){
         out = out + QString::fromStdString(std::to_string( ctpArray[i])) + " " ;

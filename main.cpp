@@ -25,6 +25,7 @@
 #include <QDir>
 #include <QStringList>
 #include "userinput.h"
+#include "congealer.h"
 
 #include <QFuture>
 #include <QtConcurrent/QtConcurrent>
@@ -73,13 +74,21 @@ int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
     //Q_ConsoleDebugStream stream(std::cout, "log_DalsaImageAnalyzer");
+     cout<<"Starting Main" <<endl;
+      cout<<"Starting CameraViewer" <<endl;
     CameraViewer c;  // grab frames and send to faceDetector
+     cout<<"Starting FaceDetector" <<endl;
     VideoFaceDetector d(CASCADE_FILE); // detect faces and send to User
+     cout<<"Starting User" <<endl;
 
     UserInput u; // user program
+    Congealer cong;
+
+    cout<<"Starting connections" <<endl;
 
     qRegisterMetaType< cv::Mat >("cv::Mat");
     qRegisterMetaType< cv::Rect >("cv::Rect");
+    //qRegisterMetaType< std::string>;
     QObject::connect(&c,SIGNAL(sendFrame(cv::Mat)),&d,SLOT(catchFrame(cv::Mat)));
     QObject::connect(&d,SIGNAL(sendRectangle(cv::Rect)),&c,SLOT(catchFaceRectangle(cv::Rect)));
 
@@ -87,12 +96,17 @@ int main(int argc, char *argv[])
    // QObject::connect(&c,SIGNAL(sendDetectedFace(cv::Mat)),&u,SLOT(catchFace(cv::Mat)));
     QObject::connect(&u,SIGNAL(savingFacesMode(bool)),&c,SLOT(saveVideos(bool)));
 
+    QObject::connect(&u,SIGNAL(congealImages(QString,QString,bool)),&cong,SLOT(startCongeal(QString,QString,bool)));
+
+
     cout<<"Starting camera"<<endl;
     c.start();
     cout<<"Starting detector" <<endl;
     d.start();
     cout<<"starting user"<<endl;
     u.start();
+    cout<<"Starting congealer in background" <<endl;
+    cong.start();
 
 
 
